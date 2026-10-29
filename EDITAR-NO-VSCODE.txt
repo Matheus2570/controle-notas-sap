@@ -1,0 +1,23 @@
+NOTAFLOW v1.3 — EDITAR O SITE COM VS CODE
+
+1. Descompacte o ZIP.
+2. Abra a pasta controle-notas-sap no Visual Studio Code.
+3. Terminal: npm install
+4. Terminal: npm run dev
+5. Edite src/App.jsx para mudar funcionalidades e layout.
+6. Edite src/styles.css para mudar cores, espaçamentos e estilos.
+7. Projeto novo: configure supabase/schema.sql. Banco existente: roles_upgrade.sql (se ainda não aplicado) e depois invoice_workflow.sql.
+8. Faça commit/push no GitHub; a hospedagem conectada ao repositório publicará mudanças.
+
+DENTRO DO SITE, EM 'Aparência do site', o ADMIN muda o nome, subtítulo,
+mensagem inicial e cor de destaque sem programar. Isso não é um editor de código
+como o VS Code. Para mudar a estrutura do aplicativo, edite o código no VS Code.
+
+NOTAS FISCAIS: em Notas fiscais, selecione até quatro materiais já cadastrados e
+informe número e chave da NF-e. A data de emissão vem preenchida automaticamente;
+SAP, Forms, site, data do pedido, quantidades e valores vêm dos lançamentos.
+
+AUDITORIA: o sistema registra alterações de pedidos, materiais, notas e vínculos.
+
+ACESSO NO BANCO: o perfil admin é concedido MANUALMENTE via SQL Editor;
+novos usuários ficam como viewer (somente leitura). Consulte README.md.

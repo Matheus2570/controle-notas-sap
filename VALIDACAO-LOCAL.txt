@@ -1,0 +1,17 @@
+VALIDAÇÃO DO CÓDIGO — NOTAFLOW v1.3
+
+Verificações executadas neste ambiente:
+- Transpilação estática com o TypeScript Compiler API: App.jsx, api.js e main.jsx sem erros de sintaxe.
+- Revisão do fluxo de notas fiscais: registro de cabeçalho, chave NF-e de 44 dígitos, data de emissão automática e vínculo de até quatro materiais já cadastrados.
+- O banco PostgreSQL inclui unicidade da chave, limite de quatro itens, vínculo único de cada material e bloqueio de edição/exclusão acidental de materiais faturados.
+- O acesso viewer é somente leitura; as gravações de pedidos e notas exigem perfil admin e são protegidas por RLS/funções PostgreSQL.
+- A trilha invoice_activity registra criação, alteração, exclusão e vínculo/desvínculo de materiais.
+- A pesquisa de SAP/Forms pode exibir o número da nota vinculada e o CSV inclui número, chave e data de emissão.
+- O fluxo de demonstração salva notas e vínculos no localStorage, sem dados reais.
+
+Limitações importantes:
+- npm install não terminou neste ambiente, pois o acesso ao registro npm expirou; portanto npm run build não pôde ser concluído aqui.
+- O SQL não foi executado contra uma instância real do Supabase neste ambiente.
+- Antes do uso real, execute schema.sql em projeto novo ou roles_upgrade.sql (se necessário) seguido de invoice_workflow.sql em projeto existente; depois valide o SQL e teste admin/viewer em duas sessões separadas.
+- Nunca publique o arquivo .env nem use a chave service_role no frontend.
+- Use dados reais da empresa somente após autorização de TI/Segurança da Informação.
