@@ -1,6 +1,43 @@
-node_modules
-dist
+# Dependências e build
+node_modules/
+dist/
+.vite/
+.vercel/
+coverage/
+
+# Variáveis de ambiente e credenciais
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+service-account*.json
+firebase-admin*.json
+.segredos/
+
+# Logs e caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.cache/
+
+# Sistema e editor
 .DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Backups e arquivos compactados
+*.rar
+*.zip
+*.7z
+*.bak
+*.backup
+*~

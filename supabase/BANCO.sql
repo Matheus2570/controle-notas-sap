@@ -1,8 +1,25 @@
--- NotaFlow 2.0 - instalação NOVA no Supabase.
--- Este script NÃO contém DROP/TRUNCATE, não remove os dados de projetos anteriores.
--- Execute em um PROJETO SUPABASE NOVO para garantir uma base realmente vazia.
--- Após criar usuários em Authentication, execute PROMOVER_ADMIN.sql.
-begin;
+-- ================================================================
+-- NOTAFLOW | BANCO FINAL (2.5) - INSTALACAO LIMPA
+-- ================================================================
+-- UNICO arquivo para criar o banco de um projeto Supabase NOVO.
+-- Consolida: CRIAR_BANCO_NOVO + CORRIGIR_ERRO_OLD_NUMBER +
+-- ATIVAR_BLOCOS_AUTOMATICOS + ATUALIZAR_FLUXO_PEDIDO_NF +
+-- ATUALIZAR_HISTORICO_E_ARMAZENAMENTO.
+--
+-- O app usa as tabelas nf_* e auth.users do Supabase.
+-- Execute UMA VEZ no SQL Editor, num projeto NOVO ou depois de
+-- executar APAGAR_TUDO_NOTAFLOW.sql e confirmar o reset.
+-- NAO execute os SQLs antigos depois deste arquivo: eles podem
+-- substituir funcoes mais recentes por versoes antigas.
+--
+-- IMPORTANTE: este arquivo NAO EXCLUI registros existentes.
+-- Ele tambem NAO cria usuarios/senhas no Supabase Auth.
+-- Depois do SQL, crie usuarios em Authentication > Users e
+-- promova o admin com o SQL comentado no fim do arquivo.
+-- ================================================================
+BEGIN;
+
+-- (1) ESTRUTURA, AUTENTICACAO, RLS, REGRAS DE NF E AUDITORIA FINAL
 create extension if not exists pgcrypto;
 
 create table if not exists public.nf_profiles (
@@ -114,7 +131,7 @@ begin
   if not found then raise exception 'Nota fiscal não encontrada';end if;
   select status into v_status from public.nf_materials where id=new.material_id for update;
   if not found then raise exception 'Material não encontrado';end if;
-  if v_status='cancelado' then raise exception 'Material cancelado não pode ser faturado';end if;
+  if v_status<>'solicitado' then raise exception 'Solicite o material no SAP (status Pedido) antes de vincular a NF';end if;
   select count(*) into v_count from public.nf_invoice_materials where invoice_id=new.invoice_id;
   if v_count >= 4 then raise exception 'Uma nota fiscal pode conter no máximo 4 materiais';end if;
   new.prior_status:=v_status;
@@ -163,17 +180,99 @@ create trigger nf_guard_material_status before insert or update of status on pub
   for each row execute function public.nf_guard_linked_status();
 
 -- Registro de alterações no servidor, inclusive quando os clientes não enviam logs.
-create or replace function public.nf_audit() returns trigger language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;v_title text;
+-- Auditoria robusta: campos variam entre materials, invoices e blocks.
+-- JSONB evita resolução indevida de OLD.number em tabelas sem essa coluna.
+create or replace function public.nf_audit()
+returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  previous_data jsonb := '{}'::jsonb;
+  current_data jsonb := '{}'::jsonb;
+  picked jsonb;
+  v_id uuid;
+  v_action text := lower(tg_op);
+  v_subject text := '';
+  v_diff text := '';
+  v_summary text;
 begin
- v_id:=case when tg_op='DELETE' then old.id else new.id end;
- v_title:=case when tg_table_name='nf_materials' then coalesce((case when tg_op='DELETE' then old.sap_code else new.sap_code end),'')
-               when tg_table_name='nf_invoices' then (case when tg_op='DELETE' then old.number else new.number end)
-               else (case when tg_op='DELETE' then old.name else new.name end) end;
- insert into public.nf_activity(entity,entity_id,action,summary,author_id)
- values(tg_table_name,v_id,lower(tg_op),coalesce(v_title,''),auth.uid());
- return case when tg_op='DELETE' then old else new end;
-end;$$;
+  if tg_op in ('UPDATE','DELETE') then previous_data := to_jsonb(old); end if;
+  if tg_op in ('INSERT','UPDATE') then current_data := to_jsonb(new); end if;
+  picked := case when tg_op='DELETE' then previous_data else current_data end;
+  v_id := nullif(picked->>'id','')::uuid;
+
+  -- Não gerar histórico quando só o carimbo updated_at foi alterado.
+  if tg_op='UPDATE' and (previous_data - 'updated_at') = (current_data - 'updated_at') then
+    return new;
+  end if;
+
+  if tg_table_name='nf_materials' then
+    v_subject := concat_ws(' · ',
+      case when coalesce(picked->>'sap_code','')<>'' then 'SAP '||left(picked->>'sap_code',35) end,
+      case when coalesce(picked->>'forms_code','')<>'' then 'Forms '||left(picked->>'forms_code',35) end
+    );
+    if v_subject='' then v_subject:='Material'; end if;
+    if tg_op='UPDATE' then
+      v_diff := concat_ws('; ',
+        case when previous_data->>'status' is distinct from current_data->>'status'
+          then 'status '||coalesce(previous_data->>'status','—')||' → '||coalesce(current_data->>'status','—') end,
+        case when previous_data->>'quantity' is distinct from current_data->>'quantity'
+          then 'qtd '||coalesce(previous_data->>'quantity','—')||' → '||coalesce(current_data->>'quantity','—') end,
+        case when previous_data->>'unit_price' is distinct from current_data->>'unit_price'
+          then 'unitário '||coalesce(previous_data->>'unit_price','—')||' → '||coalesce(current_data->>'unit_price','—') end,
+        case when previous_data->>'process' is distinct from current_data->>'process'
+          then 'processo '||coalesce(previous_data->>'process','—')||' → '||coalesce(current_data->>'process','—') end,
+        case when previous_data->>'block_id' is distinct from current_data->>'block_id'
+          then 'bloco alterado' end,
+        case when previous_data->>'site_id' is distinct from current_data->>'site_id'
+          then 'site alterado' end,
+        case when previous_data->>'sap_code' is distinct from current_data->>'sap_code'
+          then 'SAP alterado' end,
+        case when previous_data->>'forms_code' is distinct from current_data->>'forms_code'
+          then 'Forms alterado' end,
+        case when previous_data->>'description' is distinct from current_data->>'description'
+          then 'descrição editada' end,
+        case when previous_data->>'requested_on' is distinct from current_data->>'requested_on'
+          then 'data alterada' end,
+        case when previous_data->>'notes' is distinct from current_data->>'notes'
+          then 'observações editadas' end
+      );
+      if v_diff='' then return new; end if;
+      if previous_data->>'status' is distinct from current_data->>'status' then v_action:='status'; end if;
+    end if;
+  elsif tg_table_name='nf_invoices' then
+    v_subject := 'NF '||coalesce(nullif(picked->>'number',''),'—');
+    if tg_op='UPDATE' then
+      v_diff := concat_ws('; ',
+        case when previous_data->>'number' is distinct from current_data->>'number' then 'número alterado' end,
+        case when previous_data->>'issued_on' is distinct from current_data->>'issued_on' then 'data alterada' end,
+        case when previous_data->>'access_key' is distinct from current_data->>'access_key' then 'chave alterada' end,
+        case when previous_data->>'notes' is distinct from current_data->>'notes' then 'observações editadas' end
+      );
+      if v_diff='' then return new; end if;
+    end if;
+  elsif tg_table_name='nf_blocks' then
+    v_subject := left(coalesce(nullif(picked->>'name',''),'Bloco'),75);
+    if tg_op='UPDATE' then
+      v_diff := concat_ws('; ',
+        case when previous_data->>'name' is distinct from current_data->>'name' then 'nome alterado' end,
+        case when previous_data->>'position' is distinct from current_data->>'position' then 'ordem alterada' end
+      );
+      if v_diff='' then return new; end if;
+    end if;
+  else
+    if tg_op='DELETE' then return old; end if;
+    return new;
+  end if;
+
+  v_summary := left(v_subject || case when v_diff<>'' then ' · '||v_diff else '' end, 240);
+  insert into public.nf_activity(entity,entity_id,action,summary,author_id)
+    values (tg_table_name,v_id,v_action,v_summary,auth.uid());
+
+  if tg_op='DELETE' then return old; end if;
+  return new;
+end;
+$$;
+
 -- Audit only the business entities, never profile/links.
 drop trigger if exists nf_audit_materials on public.nf_materials;
 create trigger nf_audit_materials after insert or update or delete on public.nf_materials for each row execute function public.nf_audit();
@@ -262,4 +361,198 @@ end;$$;
 revoke all on function public.nf_save_invoice(uuid,text,text,date,text,uuid[]) from public;
 grant execute on function public.nf_save_invoice(uuid,text,text,date,text,uuid[]) to authenticated;
 
-commit;
+-- (2) BLOCOS AUTOMATICOS, LIMITE DE 4, MOVIMENTACAO
+ALTER TABLE public.nf_blocks
+  ADD COLUMN IF NOT EXISTS auto_created boolean NOT NULL DEFAULT false;
+ALTER TABLE public.nf_blocks
+  ADD COLUMN IF NOT EXISTS process text;
+ALTER TABLE public.nf_blocks
+  ADD COLUMN IF NOT EXISTS site_id uuid;
+
+-- Restringe a capacidade a 4 itens mesmo em edições manuais ou pela API.
+CREATE OR REPLACE FUNCTION public.nf_guard_block_capacity()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE v_total integer;
+BEGIN
+  IF new.block_id IS NULL THEN RETURN new; END IF;
+  IF tg_op = 'UPDATE' THEN
+    IF old.block_id IS NOT DISTINCT FROM new.block_id THEN
+      RETURN new;
+    END IF;
+  END IF;
+  -- Bloqueio de linha evita que duas sessões insiram o 4º e 5º item ao mesmo tempo.
+  PERFORM 1 FROM public.nf_blocks WHERE id = new.block_id FOR UPDATE;
+  SELECT count(*) INTO v_total
+    FROM public.nf_materials WHERE block_id = new.block_id AND id <> new.id;
+  IF v_total >= 4 THEN
+    RAISE EXCEPTION 'Este bloco já possui 4 materiais. Escolha outro bloco.';
+  END IF;
+  RETURN new;
+END;
+$$;
+DROP TRIGGER IF EXISTS nf_guard_block_capacity_trigger ON public.nf_materials;
+CREATE TRIGGER nf_guard_block_capacity_trigger
+BEFORE INSERT OR UPDATE OF block_id ON public.nf_materials
+FOR EACH ROW EXECUTE FUNCTION public.nf_guard_block_capacity();
+
+-- Agrupa APENAS itens sem bloco; mantém site e processo separados.
+-- Blocos manuais nunca são usados pela automação.
+CREATE OR REPLACE FUNCTION public.nf_autogroup_materials()
+RETURNS integer LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE
+  v_item record;
+  v_block uuid;
+  v_slot integer;
+  v_new_pos integer;
+  v_group_name text;
+  v_done integer := 0;
+BEGIN
+  IF current_user NOT IN ('postgres','service_role') AND NOT public.nf_is_admin() THEN
+    RAISE EXCEPTION 'Somente administradores podem organizar materiais';
+  END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(936100, 4204);
+  FOR v_item IN
+    SELECT id,site_id,process FROM public.nf_materials
+    WHERE block_id IS NULL
+    ORDER BY site_id,
+      CASE process WHEN 'cnc' THEN 0 WHEN '3d' THEN 1 WHEN 'outro' THEN 2 ELSE 3 END,
+      created_at,id
+  LOOP
+    v_block := NULL;
+    v_slot := 0;
+    SELECT b.id, COALESCE((SELECT max(x.position)+1 FROM public.nf_materials x WHERE x.block_id=b.id),0)
+      INTO v_block,v_slot
+      FROM public.nf_blocks b
+      WHERE b.auto_created = true
+        AND b.site_id IS NOT DISTINCT FROM v_item.site_id
+        AND b.process = v_item.process
+        AND (SELECT count(*) FROM public.nf_materials x WHERE x.block_id=b.id) < 4
+      ORDER BY b.position,b.created_at,b.id
+      LIMIT 1;
+    IF v_block IS NULL THEN
+      SELECT coalesce(max(position),-1)+1 INTO v_new_pos FROM public.nf_blocks;
+      v_group_name := CASE v_item.process
+        WHEN 'cnc' THEN 'CNC'
+        WHEN '3d' THEN 'Impressão 3D'
+        WHEN 'outro' THEN 'Outro'
+        ELSE 'Não definido' END;
+      INSERT INTO public.nf_blocks(name,position,auto_created,process,site_id)
+      VALUES ('BLOCO ' || lpad((v_new_pos+1)::text,3,'0') || ' — ' || v_group_name,
+              v_new_pos,true,v_item.process,v_item.site_id)
+      RETURNING id INTO v_block;
+      v_slot := 0;
+    END IF;
+    UPDATE public.nf_materials
+      SET block_id=v_block,position=v_slot
+      WHERE id=v_item.id AND block_id IS NULL;
+    v_done := v_done + 1;
+  END LOOP;
+  RETURN v_done;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.nf_autogroup_materials() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.nf_autogroup_materials() TO authenticated;
+
+-- Mover manualmente com validação no SERVIDOR. O RPC estava faltando no SQL original.
+-- Continua permitindo misturar processos manualmente, mas nunca ultrapassa 4.
+CREATE OR REPLACE FUNCTION public.nf_move_materials(p_material_ids uuid[], p_block_id uuid)
+RETURNS integer LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+DECLARE
+  v_id uuid;
+  v_exists integer;
+  v_extra integer;
+  v_current integer;
+  v_position integer;
+  v_moved integer := 0;
+BEGIN
+  IF NOT public.nf_is_admin() THEN
+    RAISE EXCEPTION 'Somente administradores podem mover materiais';
+  END IF;
+  IF p_material_ids IS NULL OR cardinality(p_material_ids) = 0 THEN RETURN 0; END IF;
+  PERFORM pg_catalog.pg_advisory_xact_lock(936100, 4204);
+
+  SELECT count(DISTINCT id) INTO v_exists
+  FROM public.nf_materials WHERE id = ANY(p_material_ids);
+  IF v_exists <> (SELECT count(DISTINCT x) FROM unnest(p_material_ids) x WHERE x IS NOT NULL) THEN
+    RAISE EXCEPTION 'Um dos materiais não existe ou não está acessível';
+  END IF;
+
+  IF p_block_id IS NOT NULL THEN
+    PERFORM 1 FROM public.nf_blocks WHERE id = p_block_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Bloco de destino não encontrado'; END IF;
+    SELECT count(*) INTO v_current FROM public.nf_materials WHERE block_id=p_block_id;
+    SELECT count(*) INTO v_extra FROM public.nf_materials
+      WHERE id = ANY(p_material_ids) AND block_id IS DISTINCT FROM p_block_id;
+    IF v_current + v_extra > 4 THEN
+      RAISE EXCEPTION 'O bloco admite até 4 materiais; libere espaço ou escolha outro bloco';
+    END IF;
+  END IF;
+
+  FOR v_id IN SELECT DISTINCT m.id FROM public.nf_materials m
+              WHERE m.id = ANY(p_material_ids) AND m.block_id IS DISTINCT FROM p_block_id
+              ORDER BY m.id
+  LOOP
+    IF p_block_id IS NULL THEN
+      v_position := 0;
+    ELSE
+      SELECT coalesce(max(position),-1)+1 INTO v_position
+        FROM public.nf_materials WHERE block_id=p_block_id;
+    END IF;
+    UPDATE public.nf_materials SET block_id=p_block_id, position=v_position WHERE id=v_id;
+    v_moved := v_moved + 1;
+  END LOOP;
+  RETURN v_moved;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.nf_move_materials(uuid[],uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.nf_move_materials(uuid[],uuid) TO authenticated;
+
+-- Importação de uma vez: organiza depois que todas as linhas foram inseridas.
+CREATE OR REPLACE FUNCTION public.nf_autogroup_on_insert()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
+BEGIN
+  PERFORM public.nf_autogroup_materials();
+  RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS nf_autogroup_after_insert ON public.nf_materials;
+CREATE TRIGGER nf_autogroup_after_insert
+AFTER INSERT ON public.nf_materials
+FOR EACH STATEMENT EXECUTE FUNCTION public.nf_autogroup_on_insert();
+
+-- (3) MEDIDOR REAL DE ARMAZENAMENTO SOMENTE PARA ADMIN
+create or replace function public.nf_database_usage_bytes()
+returns bigint
+language plpgsql security definer stable set search_path = '' as $$
+begin
+  if auth.uid() is null or not public.nf_is_admin() then
+    raise exception 'Apenas administradores podem consultar o tamanho do banco';
+  end if;
+  return pg_catalog.pg_database_size(pg_catalog.current_database());
+end;
+$$;
+revoke all on function public.nf_database_usage_bytes() from public;
+revoke all on function public.nf_database_usage_bytes() from anon;
+grant execute on function public.nf_database_usage_bytes() to authenticated;
+
+COMMIT;
+
+-- ================================================================
+-- CONFERENCIA OPCIONAL (somente leitura):
+-- SELECT table_name FROM information_schema.tables
+-- WHERE table_schema='public' AND table_name LIKE 'nf_%'
+-- ORDER BY table_name;
+--
+-- IMPORTANTE - CADASTRAR ADMIN (PASSO SEPARADO):
+-- 1. Crie a conta no Supabase > Authentication > Users.
+-- 2. Em outra consulta, substitua o email e execute:
+-- UPDATE public.nf_profiles SET role = 'admin'
+-- WHERE user_id = (
+--   SELECT id FROM auth.users
+--   WHERE lower(email)=lower('SEU_EMAIL@EXEMPLO.COM')
+-- );
+-- SELECT email,role FROM public.nf_profiles ORDER BY email;
+--
+-- Este banco nao preenche automaticamente seus sites/fabricas;
+-- cadastre-os na tela Configuracoes do NotaFlow.
+-- ================================================================

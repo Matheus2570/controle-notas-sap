@@ -1,5 +1,5 @@
 export const STATUSES = ['rascunho','solicitado','nota_recebida','concluido','cancelado'];
-export const STATUS_NAMES = {rascunho:'Rascunho',solicitado:'Pedido',nota_recebida:'Nota recebida',concluido:'Concluído',cancelado:'Cancelado'};
+export const STATUS_NAMES = {rascunho:'A pedir',solicitado:'Pedido',nota_recebida:'Nota recebida',concluido:'Concluído',cancelado:'Cancelado'};
 export const PROCESSES = ['3d','cnc','outro','indefinido'];
 export const PROCESS_NAMES = {'3d':'Impressão 3D',cnc:'CNC',outro:'Outro',indefinido:'Não definido'};
 export const today = () => new Date().toLocaleDateString('en-CA');
@@ -16,6 +16,8 @@ export const matches = (m,filters, sites=[]) => {
   if(filters.site_id && m.site_id!==filters.site_id) return false;
   if(filters.from && m.requested_on<filters.from) return false;
   if(filters.to && m.requested_on>filters.to) return false;
+  if(filters.min_value!==''&&filters.min_value!=null&&itemTotal(m)<Number(filters.min_value))return false;
+  if(filters.max_value!==''&&filters.max_value!=null&&itemTotal(m)>Number(filters.max_value))return false;
   if(filters.invoice==='with' && !m.invoice_id) return false;
   if(filters.invoice==='without' && m.invoice_id) return false;
   return true;
@@ -32,13 +34,19 @@ export const sortMaterials = (rows,sort='recent') => [...rows].sort((a,b)=>{
     case 'value_asc':return itemTotal(a)-itemTotal(b);
     case 'value_desc':return itemTotal(b)-itemTotal(a);
     case 'status':return cmp(a.status,b.status);
+    case 'quantity_desc':return Number(b.quantity||0)-Number(a.quantity||0);
+    case 'quantity_asc':return Number(a.quantity||0)-Number(b.quantity||0);
+    case 'unit_desc':return Number(b.unit_price||0)-Number(a.unit_price||0);
+    case 'unit_asc':return Number(a.unit_price||0)-Number(b.unit_price||0);
+    case 'site':return cmp(a.site_name,b.site_name);
+    case 'process':return cmp(PROCESS_NAMES[a.process],PROCESS_NAMES[b.process]);
     default:return cmp(b.created_at,a.created_at)||cmp(b.id,a.id);
   }
 });
 export const validateInvoiceSelection = (ids,materials,currentInvoiceId=null) => {
   const unique=[...new Set(ids)];
   if(!unique.length||unique.length>4) throw new Error('Selecione de 1 a 4 materiais por nota fiscal.');
-  unique.forEach(k=>{const m=materials.find(v=>v.id===k);if(!m)throw new Error('Material não encontrado.');if(m.status==='cancelado')throw new Error('Material cancelado não pode receber nota.');if(m.invoice_id&&m.invoice_id!==currentInvoiceId)throw new Error('Este material já está vinculado a outra nota.');});
+  unique.forEach(k=>{const m=materials.find(v=>v.id===k);if(!m)throw new Error('Material não encontrado.');if(m.status!=='solicitado'&&!(currentInvoiceId&&m.invoice_id===currentInvoiceId))throw new Error('Solicite o material no SAP (status Pedido) antes de vincular a nota fiscal.');if(m.invoice_id&&m.invoice_id!==currentInvoiceId)throw new Error('Este material já está vinculado a outra nota.');});
   return unique;
 };
 export const parseExcel = input => String(input||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map((line,i)=>{

@@ -63,3 +63,11 @@ Cole **sem cabeçalho**, na ordem: SAP | Forms | Descrição | Processo (`3d`, `
 ## Migração de versões antigas
 
 Esta versão **não apaga** dados antigos nem importa automaticamente os bancos anteriores. Caso algum banco seja recuperado, faça backup e trate a importação como tarefa separada: o modelo dos dados mudou. Não execute scripts antigos sobre o projeto novo.
+
+## Atualização 2.4 — fluxo por bloco e filtros
+
+Para atualizar um banco **já existente**, siga `ATUALIZACAO-V2.4-LEIA-PRIMEIRO.md`. Nesta versão, cada bloco de até quatro é solicitado no SAP antes de receber uma NF; o botão de registrar nota carrega automaticamente os materiais desse bloco. CNC e 3D têm etiquetas coloridas. A etapa **Concluído** não é automática. **Não recrie o banco existente.**
+
+## Atualização v2.5: histórico compacto + armazenamento
+
+Leia **`ATUALIZACAO-V2.5-HISTORICO-ARMAZENAMENTO.md`**. Em banco existente, execute somente `supabase/ATUALIZAR_HISTORICO_E_ARMAZENAMENTO.sql` antes de usar o novo painel de espaço em Configurações. A versão preserva todos os dados, telas e o fluxo SAP → bloco → NF da v2.4.

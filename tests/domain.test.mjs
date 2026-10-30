@@ -13,3 +13,13 @@ test('link de nota e exclusão restauram o status original',()=>{const linked=tr
 test('impede quinta linha e material com outra nota',()=>{assert.throws(()=>validateInvoiceSelection(['a','b','c','d','e'],fixtures),/1 a 4/);assert.throws(()=>validateInvoiceSelection(['a'],[{...fixtures[0],invoice_id:'nf1'}],'nf2'),/outra nota/);});
 test('importação por colagem tabulada mantém preço brasileiro',()=>{const [a]=parseExcel('100\t859\tPeça\tcnc\t2\t45,90');assert.equal(a.unit_price,45.9);assert.equal(itemTotal(a),91.8);});
 test('CSV inclui Forms e SAP',()=>{const csv=toCsv([fixtures[0]]);assert.match(csv,/859/);assert.match(csv,/100/);});
+test('nota só aceita materiais previamente solicitados no SAP',()=>{
+ assert.throws(()=>validateInvoiceSelection(['b'],fixtures),/Solicite o material/);
+ assert.deepEqual(validateInvoiceSelection(['a','c'],fixtures),['a','c']);
+});
+test('filtro por valor total, faixa e ordenação de SAP, Forms e preço',()=>{
+ assert.deepEqual(fixtures.filter(m=>matches(m,{min_value:'7',max_value:'20'},[])).map(m=>m.id),['b','c']);
+ assert.deepEqual(sortMaterials(fixtures,'unit_desc').map(m=>m.id),['b','c','a']);
+ assert.deepEqual(sortMaterials(fixtures,'forms').map(m=>m.id),['a','b','c']);
+ assert.deepEqual(sortMaterials(fixtures,'quantity_desc').map(m=>m.id),['a','b','c']);
+});
