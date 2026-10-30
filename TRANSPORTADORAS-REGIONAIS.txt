@@ -1,0 +1,14 @@
+NOTAFLOW — MAPEAMENTO INICIAL DE TRANSPORTADORAS
+
+SUDESTE — transportadora 10122618 | Sudeste
+- Valinhos — centro físico 3178
+- Vinhedo — centro físico 3166
+- Indaiatuba — centro físico a confirmar
+- Aguaí — centro físico a confirmar
+
+NORDESTE — transportadora 10083071 | Nordeste
+- Suape/Ipojuca — centro físico 3165
+- Igarassu — centro físico 3181
+- Garanhuns — centro físico 5029
+
+Os centros físicos de Indaiatuba e Aguaí ainda não foram informados. Confirme esses códigos com a fonte interna antes de usar em produção.

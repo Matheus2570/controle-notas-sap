@@ -1,3 +1,5 @@
+IMPORTANTE: LEIA PRIMEIRO MELHORIAS-E-INSTALACAO.md PARA APLICAR OS AJUSTES SEM PERDER DADOS.
+
 NOTAFLOW v1.3 — COMO COMEÇAR
 
 TESTAR NO PC
@@ -32,3 +34,13 @@ PERMISSÕES E CUIDADOS
 - A chave NF-e precisa ter 44 dígitos.
 - Materiais já vinculados ficam protegidos contra edição/exclusão acidental.
 - Não envie dados reais da empresa para serviços externos sem autorização.
+
+
+SITES E TRANSPORTADORAS
+Sudeste: Valinhos (3178), Vinhedo (3166), Indaiatuba (centro físico a confirmar) e Aguaí (centro físico a confirmar) usam a transportadora 10122618.
+Nordeste: Suape/Ipojuca (3165), Igarassu (3181) e Garanhuns (5029) usam a transportadora 10083071.
+Não invente os centros físicos de Indaiatuba e Aguaí; preencha quando confirmar os códigos corretos.
+
+
+ATUALIZAÇÃO DE STATUS (BANCO JÁ EXISTENTE)
+Depois de publicar esta versão, execute o arquivo supabase/material_status_fix.sql no SQL Editor do Supabase. A migração cria o status por material, preserva os status atuais como ponto de partida e não exclui dados.

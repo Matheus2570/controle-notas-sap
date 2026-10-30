@@ -1,0 +1,23 @@
+NotaFlow - atualizacoes deste pacote
+
+1. A selecao da tabela de Lancamentos agora usa o identificador individual do item (item_id), em vez do identificador do pedido (request_id). Isso evita que clicar em uma linha marque automaticamente outras linhas do mesmo pedido.
+2. A selecao de todos os itens visiveis usa os mesmos identificadores individuais.
+3. Ao aplicar status em massa, o sistema converte os itens selecionados nos pedidos correspondentes, porque o status atualmente e armazenado no nivel do pedido no banco.
+4. A ordenacao das tabelas e salva no navegador e restaurada ao retornar para a tela.
+5. A tela de Notas fiscais continua com os filtros de busca, site, status, processo e periodo da versao base.
+
+IMPORTANTE:
+Esta atualizacao corrige a selecao individual e a persistencia da ordenacao. Ela nao cria ainda uma entidade persistente de blocos compartilhada entre Lancamentos e Notas fiscais. Para garantir que os mesmos blocos personalizados (ex.: 4 + 2 CNC e 4 Impressao 3D) sejam mantidos nas duas telas e no banco, e necessaria uma alteracao adicional no modelo de dados/API e validacao contra o esquema real do Supabase. Este pacote nao executa migracoes nem apaga dados.
+
+Para testar localmente:
+1. Extraia o ZIP.
+2. Execute npm install.
+3. Configure as variaveis do Supabase conforme .env.example.
+4. Execute npm run dev.
+
+
+CORREÇÕES DE STATUS E TABELAS
+- Status de nota fiscal agora é registrado no material selecionado, sem mudar automaticamente todos os itens do mesmo pedido.
+- Alteração em massa usa os IDs dos materiais selecionados, não os IDs dos pedidos.
+- Ordenação da tabela de lançamentos considera todos os resultados filtrados, não somente a página atual.
+- Para banco Supabase já existente, executar supabase/material_status_fix.sql no SQL Editor. O script é aditivo e não apaga dados.
