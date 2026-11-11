@@ -130,7 +130,12 @@ function InvoiceEditor({invoice,materials,blocks,startBlockId='',onClose,onSave,
    {chosenBlock&&<div className="span-2"><div className="block-ready-hint">{targetReady} de {targetTotal} material(is) deste bloco podem receber NF. {targetReady<targetTotal?'Os materiais em A pedir devem passar para Pedido antes de registrar a nota.':''}</div></div>}
    <Field label="Número da nota"><TextInput autoFocus required placeholder="Ex.: 123456" value={form.number} onChange={v=>setForm(p=>({...p,number:v}))}/></Field>
    <Field label="Data de emissão"><TextInput type="date" required value={form.issued_on} onChange={v=>setForm(p=>({...p,issued_on:v}))}/></Field>
-   <div className="span-2"><Field label="Chave NF-e (44 dígitos, opcional)"><TextInput value={form.access_key} inputMode="numeric" onChange={v=>setForm(p=>({...p,access_key:v.replace(/\D/g,'')}))} placeholder="Digite ou cole a chave de acesso"/></Field></div>
+   <div className="span-2"><Field label="Chave NF-e (44 dígitos, opcional)"><TextInput
+    value={form.access_key}
+    inputMode="numeric"
+    onChange={v=>setForm(p=>({...p,access_key:v.replace(/\D/g,'').slice(0,44)}))}
+    placeholder="Cole a chave com ou sem espaços"
+   /></Field></div>
   </div>
   <div className="subhead compact"><div><h2>Materiais desta nota</h2><p>Selecione até quatro materiais já solicitados no SAP.</p></div><span className={`count-badge ${selected.length===4?'full':''}`}>{selected.length} / 4</span></div>
   <div className="invoice-select-filters"><div className="search-field"><Search size={16}/><TextInput value={search} onChange={setSearch} placeholder="SAP / Forms / descrição"/></div><Select value={site} onChange={setSite}><Opts items={siteOptions} blank="Todos os sites"/></Select><Select value={process} onChange={setProcess}><Opts items={PROCESSES.map(x=>[x,PROCESS_NAMES[x]])} blank="Todos os processos"/></Select><Select value={order} onChange={setOrder}>{SORTS.map(([k,v])=><option key={k} value={k}>{v}</option>)}</Select></div>
