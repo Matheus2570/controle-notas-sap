@@ -21,12 +21,15 @@ const changeDetails=(before,after)=>{
 };
 const names={sites:'nf_sites',blocks:'nf_blocks',materials:'nf_materials',invoices:'nf_invoices',invoice_materials:'nf_invoice_materials',activity:'nf_activity'};
 const fail=error=>{if(error)throw new Error(error.message||String(error));};
-async function fetchAll(table){
+export async function fetchAll(table,client=supabase){
+  // A tabela de vínculos tem PK composta; não possui coluna id.
+  const orderColumns=table==='invoice_materials'?['invoice_id','material_id']:['id'];
   const all=[];for(let page=0;;page++){
-    const {data,error}=await supabase.from(names[table]).select('*').order('id',{ascending:true}).range(page*750,(page+1)*750-1);
+    let query=client.from(names[table]).select('*');
+    for(const column of orderColumns)query=query.order(column,{ascending:true});
+    const {data,error}=await query.range(page*750,(page+1)*750-1);
     fail(error);all.push(...(data||[]));if((data||[]).length<750)return all;
   }
-
 }
 async function fetchRecentActivity(){
   const {data,error}=await supabase.from('nf_activity').select('*').order('happened_at',{ascending:false}).limit(150);
