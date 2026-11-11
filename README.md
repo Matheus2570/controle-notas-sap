@@ -1,6 +1,10 @@
-# NotaFlow 2.0 — Reconstruído do zero
+# NotaFlow — Materiais, blocos temporários e notas fiscais
 
-Aplicativo React + Vite + Supabase para controle de materiais SAP, Forms, blocos de trabalho e notas fiscais. Esta é uma **nova arquitetura**; não é uma atualização incremental da versão antiga.
+Aplicativo React + Vite + Supabase para controle de materiais SAP, Forms, blocos de trabalho e notas fiscais.
+
+**Exportação Excel:** relatórios XLSX completos ou filtrados, com materiais, notas e resumo. Veja [Chave NF-e e relatório Excel](EXPORTACAO-EXCEL.md). Este complemento não exige SQL adicional.
+
+**Banco já existente:** leia [Correção dos blocos temporários](CORRECAO-BLOCOS-LEIA-PRIMEIRO.md) e execute somente [CORRIGIR_BLOCOS_TEMPORARIOS.sql](supabase/CORRIGIR_BLOCOS_TEMPORARIOS.sql) antes de publicar esta atualização. Preserve a instalação atual; não execute o reset nem recrie o banco.
 
 ## O que está incluído
 
@@ -23,9 +27,9 @@ Aplicativo React + Vite + Supabase para controle de materiais SAP, Forms, blocos
 **Recomendado: crie um novo projeto Supabase.** Assim o banco começa realmente vazio, sem risco de apagar os registros de outra aplicação. Não execute os scripts legados `schema.sql`, `roles_upgrade.sql` etc. nesta instalação nova.
 
 1. Crie o projeto em <https://supabase.com>.
-2. No SQL Editor, execute o arquivo inteiro `supabase/CRIAR_BANCO_NOVO.sql`.
+2. No SQL Editor, execute o arquivo inteiro `supabase/BANCO.sql`. Esta instrução se aplica somente a um projeto novo; para o banco existente use a migração indicada no início deste documento.
 3. Vá em **Authentication → Users** e crie os usuários. Desative cadastro público se o app for interno.
-4. Abra `supabase/PROMOVER_ADMIN.sql`, substitua `SEU_EMAIL_AQUI@EXEMPLO.COM` e execute no SQL Editor. O primeiro admin **não é criado automaticamente** por segurança.
+4. Siga a instrução comentada ao final de `supabase/BANCO.sql` para promover o administrador pelo e-mail. O primeiro admin **não é criado automaticamente** por segurança. Essa etapa é exclusiva da instalação nova.
 5. Na raiz do projeto, crie `.env.local` (não publique esse arquivo):
 
    ```env
@@ -64,10 +68,12 @@ Cole **sem cabeçalho**, na ordem: SAP | Forms | Descrição | Processo (`3d`, `
 
 Esta versão **não apaga** dados antigos nem importa automaticamente os bancos anteriores. Caso algum banco seja recuperado, faça backup e trate a importação como tarefa separada: o modelo dos dados mudou. Não execute scripts antigos sobre o projeto novo.
 
-## Atualização 2.4 — fluxo por bloco e filtros
+## Blocos temporários, histórico e armazenamento
 
-Para atualizar um banco **já existente**, siga `ATUALIZACAO-V2.4-LEIA-PRIMEIRO.md`. Nesta versão, cada bloco de até quatro é solicitado no SAP antes de receber uma NF; o botão de registrar nota carrega automaticamente os materiais desse bloco. CNC e 3D têm etiquetas coloridas. A etapa **Concluído** não é automática. **Não recrie o banco existente.**
+O fluxo continua **A pedir → Pedido no SAP → Nota recebida → Concluído**. O cadastro organiza somente os materiais novos elegíveis; itens retirados manualmente permanecem sem bloco. É possível escolher Sem bloco já no cadastro, misturar CNC/3D manualmente, renomear e ordenar os grupos. Encerrar ou excluir um bloco pede confirmação e preserva materiais, notas e vínculos fiscais.
 
-## Atualização v2.5: histórico compacto + armazenamento
+A tela Blocos separa grupos aguardando solicitação, pedidos no SAP, materiais sem bloco e Notas recebidas. A numeração usa o primeiro número livre entre os blocos existentes. A seção de notas é uma consulta, sem criar agrupamentos físicos. Veja regras e cenários no [guia da correção](CORRECAO-BLOCOS-LEIA-PRIMEIRO.md).
 
-Leia **`ATUALIZACAO-V2.5-HISTORICO-ARMAZENAMENTO.md`**. Em banco existente, execute somente `supabase/ATUALIZAR_HISTORICO_E_ARMAZENAMENTO.sql` antes de usar o novo painel de espaço em Configurações. A versão preserva todos os dados, telas e o fluxo SAP → bloco → NF da v2.4.
+O histórico compacto e a consulta de armazenamento da versão 2.5 continuam no SQL consolidado. Seus arquivos antigos foram substituídos por `BANCO.sql` para novas instalações; eles não são necessários para aplicar a correção de blocos ao banco atual.
+
+`npm test` inclui testes dos gatilhos e das políticas RLS em PostgreSQL local em memória. `npm run test:e2e` verifica a interface em desktop e celular usando somente dados de demonstração isolados. O CI executa os testes de regras/banco e o build antes da integração.

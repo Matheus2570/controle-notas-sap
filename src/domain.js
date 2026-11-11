@@ -8,6 +8,19 @@ export const money = value => Number(value||0).toLocaleString('pt-BR',{style:'cu
 export const dateLabel = value => value ? String(value).slice(0,10).split('-').reverse().join('/') : '—';
 export const itemTotal = item => Number(item.quantity||0)*Number(item.unit_price||0);
 export const normalizeKey = v => String(v||'').trim().toLocaleLowerCase('pt-BR');
+export const isReceivedMaterial = material => Boolean(material.invoice_id)||['nota_recebida','concluido'].includes(material.status);
+export const canGroupMaterial = material => !material.block_id&&!material.invoice_id&&['rascunho','solicitado'].includes(material.status);
+export const blockStage = materials => materials.length&&materials.every(isReceivedMaterial)?'received':materials.some(m=>m.status==='solicitado'&&!m.invoice_id)?'requested':'pending';
+// Nomes legados com sufixo também reservam seu número. A posição não define o nome.
+export const blockNumber = name => {
+  const match=String(name||'').trim().match(/^BLOCO\s+([0-9]+)(?:\s*[—–-].*)?$/i);
+  return match?Number(match[1]):null;
+};
+export const nextBlockName = blocks => {
+  const used=new Set(blocks.map(b=>blockNumber(b.name)));
+  let number=1;while(used.has(number))number++;
+  return `BLOCO ${String(number).padStart(3,'0')}`;
+};
 export const matches = (m,filters, sites=[]) => {
   const q=normalizeKey(filters.search); const site=sites.find(s=>s.id===m.site_id);
   if(q && ![m.sap_code,m.forms_code,m.description,m.notes,site?.name].some(v=>normalizeKey(v).includes(q))) return false;

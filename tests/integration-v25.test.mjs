@@ -4,7 +4,10 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 const root=new URL('../',import.meta.url);
 const content=(file)=>readFileSync(fileURLToPath(new URL(file,root)),'utf8');
-const sql=content('supabase/ATUALIZAR_HISTORICO_E_ARMAZENAMENTO.sql');
+// A atualização 2.5 foi consolidada em BANCO.sql; o arquivo antigo não existe.
+const banco=content('supabase/BANCO.sql');
+const sql=banco.slice(banco.indexOf('create or replace function public.nf_audit()'),banco.indexOf('-- Audit only'))+
+ banco.slice(banco.indexOf('create or replace function public.nf_database_usage_bytes()'),banco.indexOf('COMMIT;'));
 const jsx=content('src/App.jsx');
 const store=content('src/store.js');
 test('migração não apaga tabelas ou registros existentes',()=>{

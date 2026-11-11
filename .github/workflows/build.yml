@@ -17,6 +17,8 @@ jobs:
         with:
           node-version: 22
       - name: Instalar dependências
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: Validar regras e gatilhos em banco local isolado
+        run: npm test
       - name: Validar build de produção
         run: npm run build
